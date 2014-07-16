@@ -1,0 +1,46 @@
+; PRINT RECORD WITH ALL NULL VALUES 
+
+SELECT * 
+FROM old_fds 
+WHERE No IS NULL AND TxnTime IS NULL AND TxnId IS NULL AND CostumerID IS NULL AND CostumerName IS NULL AND CostumerEmailAddress IS NULL AND TxnValue IS NULL AND TxnCurrency IS NULL AND LocValue IS NULL AND LocCurrency IS NULL AND ANDigRecom IS NULL AND Reason IS NULL AND Note IS NULL AND CardType IS NULL AND CardNoMasked IS NULL AND AuthResp IS NULL AND RuleHits IS NULL AND PRISMScANDe IS NULL AND BillingAddress IS NULL AND BillingCountry IS NULL AND ShipZip IS NULL AND ShippingState IS NULL AND ShippingCountry IS NULL AND CustIPID IS NULL AND IPIDState IS NULL AND IPIDCountry IS NULL AND BINCountry IS NULL AND ShipMeth IS NULL AND TOF IS NULL AND ReD_TOF IS NULL AND DeviceID IS NULL AND OrderLines IS NULL AND FraudType IS NULL AND CurrentStatus IS NULL AND SubClient IS NULL
+
+
+; EKSPLORASI "Click and Block" ("Manually created by ReD", "Always allow" juga sama)
+
+SELECT * 
+FROM  `datarules` 
+WHERE Description LIKE  "Click and Block%" 
+AND Description NOT LIKE "%Deny%" 
+AND Description NOT LIKE "%Challenge%" 
+AND Description NOT LIKE "%Accept%" 
+AND Description NOT LIKE "%Always allow%"
+
+
+	//DELETE NULL RECORDS FROM TABLES ~I DON'T KNOW WHY NULL RECORDS EXIST
+	/*
+	$query_table = "SHOW TABLES FROM ".$mysql_database;
+	$result_table  = mysql_query($query_table);
+	while($row_table = mysql_fetch_array($result_table)) {
+		//identify fields in the table
+		$fields = array();
+		$query_field = "show columns from ".$row_table['Tables_in_'.$mysql_database];
+		$result = mysql_query($query_field);
+		while($row = mysql_fetch_array($result)) {
+			array_push($fields, $row['Field']);
+		}
+		//delete~
+		$nfield = sizeof($fields);
+		$query_null = "DELETE FROM ".$row_table['Tables_in_'.$mysql_database]." WHERE ";
+		for($i=0;$i<$nfield;$i++) {
+			$query_null = $query_null.$fields[$i]." IS NULL";
+			if($i<$nfield-1) {
+				$query_null = $query_null." AND ";
+			}
+		}	
+	}
+	*/
+
+
+select Description, substring(Description,2,1)
+from datarules
+where Description like '"%'

@@ -1,0 +1,13 @@
+SELECT * FROM old_fds WHERE TxnId = 321080 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+Deny
+SELECT * FROM old_fds WHERE TxnId = 321081 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+Deny
+SELECT * FROM old_fds WHERE TxnId = 321082 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+Deny
+SELECT * FROM old_fds WHERE TxnId = 321083 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+Deny
+SELECT * FROM old_fds WHERE TxnId = 321084 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+Deny
+SELECT * FROM old_fds WHERE TxnId = 321085 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+Deny
+SELECT * FROM old_fds WHERE TxnId = 321086 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
