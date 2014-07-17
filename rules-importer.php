@@ -1,27 +1,25 @@
 <?php
-
 	include "database_connection.php";
 	$file = fopen("rules.txt","w");
 
 	// IMPORT RULES FROM SQL
-	echo "Importing rules".PHP_EOL;
-	importFromSQLFile('C:\xampplite\htdocs\veritrans\etl\datarules.sql');
+	echo "Importing rules...".PHP_EOL;
+	importFromSQLFile('C:\xampplite\htdocs\veritrans\fds-data\datarules.sql');
 
 	//Clean up a little
 	$query = "ALTER TABLE datarules DROP empty"; if (!mysql_query($query)) die(mysql_error());
 	$query = "UPDATE datarules SET Description = REPLACE(Description, '\"', '') WHERE Description LIKE '\"%'"; if (!mysql_query($query)) die(mysql_error()); //remove (")
 	$query = "UPDATE datarules SET Description = REPLACE(Description, 'when', 'where') WHERE Description LIKE '%when%'"; if (!mysql_query($query)) die(mysql_error()); //change 'when' to 'where' 
-	
+	$query = "DELETE FROM datarules WHERE Description = ''"; if(!mysql_query($query)) die(mysql_error());
 	
 	// TRANSFORM RULES INTO MYSQL QUERY
-
-	echo "Transforming rules".PHP_EOL;
-	recreateTable(txn_data, rulesconv, "RuleId VARCHAR(255), DateAdded VARCHAR(255), StatusResult VARCHAR(255), Expression VARCHAR(255), Glue VARCHAR(255)");
+	echo "Transforming rules...".PHP_EOL;
+	recreateTable(txn_data, rulesconv, "No INT(255), RuleId VARCHAR(255), DateAdded VARCHAR(255), StatusResult VARCHAR(255), Expression VARCHAR(255), Glue VARCHAR(255)");
 	//Kamus
-	$statuses = array( "Challenge" => "Challenge", "CHALLENGE" => "Challenge", "Deny" => "Deny", "DENY" => "Deny", "Allow" => "Accept", "ALLOW" => "Accept", "allow" => "Accept");
+	$statuses = array( "deny" => "Deny", "challenge" => "Challenge", "allow" => "Accept");
 	$signs = array( " like " => "LIKE", " = " => "=", " is not equal to " => "<>");
 	$signs_for_arr = array( " is not like " => "NOT IN"/*, " not in " => "NOT IN"*/);
-	$conjs = array(" AND ", " OR ");
+	$glues = array(" AND ", " OR ");
 	$vars = array(
 		"CUSTID" => "CustomerID",
 		"CUSTLASTNAME" => "CustomerLastName", 
@@ -37,7 +35,7 @@
 	);
 
 	//Retrieve rules
-	$ignored_description = array('%CARDNO%', '%Observe Only%', '%PRODCD%', '%Phone%', '%VIRTIPIDANONYMIZER%', '%USERDATA14%', '%AFRICA%', '%BILLZIPCD%', '%Geolocation Continent(IPID)%');
+	$ignored_description = array('%more than%', '%CARDNO%', '%Observe Only%', '%PRODCD%', '%Phone%', '%VIRTIPIDANONYMIZER%', '%USERDATA14%', '%AFRICA%', '%BILLZIPCD%', '%Geolocation Continent(IPID)%', '%AUTHRESP%');
 	$query = "SELECT RuleId, DateAdded, Description FROM datarules WHERE ";
 	$n_ignored = sizeof($ignored_description); 
 	for($i=0;$i<$n_ignored;$i++) {
@@ -46,38 +44,40 @@
 			$query = $query." AND ";
 		}
 	}
+	$j=1;
 	$result = mysql_query($query);
     while($row = mysql_fetch_assoc($result)) {
     	$StatusResult = "";
 		$Glue = "";
+		$Expression_final = "";
 		$Expressions = array();
 		$rule = explode(" if it equals ", str_replace(" then abort rule processing","",$row['Description']));
 
 		if($rule[1]) {
-
     		// Special case: pattern "Manually created by ReD - STATUS VAR if it equals VAL"
+    		$Glue = ""; 
     		$var = "";
 			$val = "";
     		$status_var = explode(' ', $rule[0]); 
     		$var = array_pop($status_var); //get variable
-			$StatusResult = $statuses[array_pop($status_var)]; //get status
+			$StatusResult = $statuses[strtolower(array_pop($status_var))]; //get status
 			$val = $rule[1]; //get value
 			$Expressions = array($vars[$var]." = '".$val."'");
 
     	} else {
-
     		// Case biasa, pakai where
+    		$Glue = "";
     		$status_expressions = explode(" where ", $rule[0]);
     		$status_ = explode(' ', $status_expressions[0]);
-    		$StatusResult = $statuses[array_pop($status_)]; //get status
+    		$StatusResult = $statuses[strtolower(array_pop($status_))]; //get status
     		
     		//breakdown according to conjunctions used in rule
     		$expressions = array();
     		$n_exp = 0;
-    		foreach($conjs as $conj) {
-    			if(strripos($status_expressions[1], $conj) !==FALSE) {
-    				$expressions = explode($conj, $status_expressions[1]);	
-    				$Glue = $conj;
+    		foreach($glues as $glue) {
+    			if(strpos($status_expressions[1], $glue) !==FALSE) {
+    				$expressions = explode($glue, $status_expressions[1]);	
+    				$Glue = $glue;
     				$n_exp = sizeof($expressions); 
     				break;
     			}
@@ -161,18 +161,19 @@
     	$Expression_final = implode(" ; ", $Expressions); //into one Expression!
     	
     	$Expression_final = mysql_real_escape_string($Expression_final);
-    	fwrite($file, $row['RuleId']." ".$row['Description'].PHP_EOL.$row['RuleId']." ".$StatusResult." ".$Expression_final.PHP_EOL.PHP_EOL);
-    	$query_insert = "INSERT INTO rulesconv (RuleId, DateAdded, StatusResult, Expression, Glue) VALUES ('".$row['RuleId']."', '".$row['DateAdded']."', '".$StatusResult."', '".$Expression_final."', '".$Glue."')"; 
+    	fwrite($file, $row['RuleId']." ".$row['Description'].PHP_EOL.$row['RuleId']." ".$StatusResult." ".$Expression_final." ".$Glue.PHP_EOL.PHP_EOL);
+    	$query_insert = "INSERT INTO rulesconv (No, RuleId, DateAdded, StatusResult, Expression, Glue) VALUES ('".$j."', '".$row['RuleId']."', '".$row['DateAdded']."', '".$StatusResult."', '".$Expression_final."', '".$Glue."')"; 
     	if (!mysql_query($query_insert)) die(mysql_error());
+    	$j++;
     }
     fclose($file);
     echo "Done".PHP_EOL;
 
-    // ----- function import from .sql
+
+    //function import from .sql
 	function importFromSQLFile($Path) {
-		$filename = $Path; // Name of the file
 		$templine = ''; // Temporary variable, used to store current query
-		$lines = file($filename); // Read in entire file
+		$lines = file($Path); // Read in entire file
 		// Loop through each line
 		foreach ($lines as $line) {
 			if (substr($line, 0, 2) == '--' || $line == '') continue; // Skip it if it's a comment
@@ -183,9 +184,9 @@
 			}
 		}
 	}
-	// ----- function import from .sql
+	//function import from .sql
 
-	// ----- function recreate column
+	//function recreate column
 	function recreateColumn($DatabaseName, $TableName, $ColumnName, $FieldType, $AfterWhat) {
 		$query = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$TableName' AND COLUMN_NAME = '$ColumnName'";
 	    $result = mysql_query($query);
@@ -197,9 +198,9 @@
 	    $query = "ALTER TABLE old_fds ADD $ColumnName $FieldType after $AfterWhat";
 		if (!mysql_query($query)) die(mysql_error());
 	}
-	// ----- function recreate column
+	//function recreate column
 
-	// ----- function recreate table
+	//function recreate table
 	function recreateTable($DatabaseName, $TableName, $Fields) {
 		$query = "SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$TableName'";
 	    $result = mysql_query($query);
@@ -211,5 +212,6 @@
 	    $query = "CREATE TABLE $TableName ($Fields)"; 
 		if (!mysql_query($query)) die(mysql_error());
 	}
-	// ----- function recreate table
+	//function recreate table
+
 ?>

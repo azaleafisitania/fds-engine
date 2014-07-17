@@ -1,13 +1,99 @@
-SELECT * FROM old_fds WHERE TxnId = 321080 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
-Deny
-SELECT * FROM old_fds WHERE TxnId = 321081 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
-Deny
-SELECT * FROM old_fds WHERE TxnId = 321082 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
-Deny
-SELECT * FROM old_fds WHERE TxnId = 321083 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
-Deny
-SELECT * FROM old_fds WHERE TxnId = 321084 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
-Deny
-SELECT * FROM old_fds WHERE TxnId = 321085 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
-Deny
-SELECT * FROM old_fds WHERE TxnId = 321086 AND BillingCountry NOT IN ('Indonesia', 'Japan', 'Singapore') HAVING BillingCountry <> '-'
+
+Txn 321080 | bri_an22181@yahoo.com | Indonesia | - | 54.254.183.234 | Singapore | Indonesia
+Rule 0453362-B1A | Deny | 0
+Rule 0453363-B1 | Deny | 0
+Rule 0453364-B1A | Deny | 0
+Rule 0453395-B1 | Deny | 0
+Rule 0453429-B1A | Deny | 0
+Rule 0453430-B1A | Deny | 0
+Rule 0455935-B1 | Deny | 0
+Rule 0455940-B1A | Deny | 0
+Rule 0455941-B1A | Deny | 0
+Rule 0455942-B1 | Deny | 0
+Rule 0455973-B1A | Deny | 0
+Rule 0455974-B1A | Deny | 0
+Rule 91550979-B1 | Deny | 0
+Rule 91550985-B1 | Deny | 0
+Rule 91550989-B1 | Deny | 0
+Rule 91550995-B1 | Deny | 0
+Rule 91550998-B1 | Deny | 0
+Rule 91550999-B1 | Deny | 0
+Rule 91551000-B1 | Deny | 0
+Rule 91551002-B1 | Deny | 0
+Rule 91551003-B1 | Deny | 0
+Rule 91551004-B1 | Deny | 0
+Rule 91551005-B1 | Deny | 0
+Rule 91551006-B1 | Deny | 0
+Rule 91551007-B1 | Deny | 0
+Rule 91551008-B1 | Deny | 0
+Rule 91551009-B1 | Deny | 0
+Rule 91551010-B1 | Deny | 0
+Rule 91551011-B1 | Deny | 0
+Rule 91551012-B1 | Deny | 0
+Rule 91551014-B1 | Deny | 0
+Rule 91551015-B1 | Deny | 0
+Rule 91551016-B1 | Deny | 0
+Rule 91551017-B1 | Deny | 0
+Rule 91551018-B1 | Deny | 0
+Rule 91551021-B1 | Deny | 0
+Rule 91551031-B1 | Deny | 0
+Rule 91551034-B1 | Deny | 0
+Rule 91551041-B1 | Deny | 0
+Rule 91551043-B1 | Deny | 0
+Rule 91551045-B1 | Deny | 0
+Rule 91551048-B1 | Deny | 0
+Rule 91551051-B1 | Deny | 0
+Rule 91551058-B1 | Deny | 0
+Rule 91551060-B1 | Deny | 0
+Rule 91551063-B1 | Deny | 0
+Rule 91551068-B1 | Deny | 0
+Rule 91551078-B1 | Deny | 0
+Rule 91551081-B1 | Deny | 0
+Rule 91551083-B1 | Deny | 0
+Rule 91551098-B1 | Deny | 0
+Rule 91551099-B1 | Deny | 0
+Rule 91551100-B1 | Deny | 0
+Rule 91551104-B1 | Deny | 0
+Rule 91551106-B1 | Deny | 0
+Rule 91551116-B1 | Deny | 0
+Rule 91551118-B1 | Deny | 0
+Rule 91551120-B1 | Deny | 0
+Rule 91551122-B1 | Deny | 0
+Rule 91551125-B1 | Deny | 0
+Rule 91551129-B1 | Deny | 0
+Rule 91551130-B1 | Deny | 0
+Rule 91551133-B1 | Deny | 0
+Rule 91551136-B1 | Deny | 0
+Rule 91551142-B1 | Deny | 0
+Rule 91551145-B1 | Deny | 0
+Rule 91551146-B1 | Deny | 0
+Rule 91551147-B1 | Deny | 0
+Rule 91551149-B1 | Deny | 0
+Rule 91551150-B1 | Deny | 0
+Rule 91551151-B1 | Deny | 0
+Rule 91551155-B1 | Deny | 0
+Rule 91551156-B1 | Deny | 0
+Rule 91551157-B1 | Deny | 0
+Rule 91551171-B1 | Deny | 0
+Rule 91551177-B1 | Deny | 0
+Rule 91551181-B1 | Deny | 0
+Rule 91551182-B1 | Deny | 0
+Rule 91551183-B1 | Deny | 0
+Rule 91551185-B1 | Deny | 0
+Rule 91551187-B1 | Deny | 0
+Rule 91551188-B1 | Deny | 0
+Rule 91551189-B1 | Deny | 0
+Rule 91551192-B1 | Deny | 0
+Rule 91551193-B1 | Deny | 0
+Rule 91551197-B1 | Deny | 0
+Rule 91551198-B1 | Deny | 0
+Rule 91551199-B1 | Deny | 0
+Rule 91551200-B1 | Deny | 0
+Rule 91551203-B1 | Deny | 0
+Rule 91551207-B1 | Deny | 0
+Rule 91551208-B1 | Deny | 0
+Rule 91551209-B1 | Deny | 0
+Rule 91551210-B1 | Deny | 0
+Rule 91551211-B1 | Deny | 0
+Rule 91551213-B1 | Deny | 0
+Rule 91551214-B1 | Deny | 
