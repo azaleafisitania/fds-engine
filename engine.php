@@ -1,8 +1,12 @@
 <?php
-	// ================= OLD FDS =================
-	//function timestamp2
+	
+	// ================= SUPPORTING FUNCTIONS =================
+	/*
+	function timestamp2 for covertCSVOldFDS
+	@param: time (in strange format)
+	note: solve strange format such "Thu27Mar", year assigned as 2014
+	*/
 	function toTimeStamp2($Time) {
-		//solve format like (example "Thu27Mar")
 		$year = '2014';
 		$date = substr($Time, 3, 2);
 		$month = substr($Time, 5, 3); 
@@ -11,7 +15,59 @@
 		$DateTime = implode(" ", array($Date, substr($Time, 9, 8))); 
 		return $DateTime;
 	}
-	//function delete null records
+
+	/*
+	function timestamp, for convertCSVSuratSanggahan
+	@param: time (in strange format)
+    note: solve mm/dd/yyyy vs. dd/mm/yyyy problem (still ambiguous for dd < 12)
+    assumption: input valid (no ambiguous dd < 12)
+    */
+    function toTimeStamp($Time) {
+        $datetime = explode(" ", $Time); 
+        $date = $datetime[0]; 
+        if(mb_stripos($date, "/")!==FALSE) {
+            $date2 = explode("/", $date);
+            $month = $date2[0];
+            $day = $date2[1]; 
+            if($month>12) list($day,$month) = array($month,$day);
+            $year = $date2[2]; 
+            $date = $year."-".$month."-".$day;
+            $time = $datetime[1];
+            $Time = $date." ".$time;
+        }
+        return $Time;
+    }
+
+	/*
+	function strpos array, search certain element in array of string
+	@param: array, element
+	*/
+	function strposArray($haystack, $needle, $start=0) {
+		if(!is_array($needle)) $needle = array($needle);
+		foreach($needle as $nee) {
+			if(strpos($haystack, $nee, $start) !== false) return $nee; // stop on first true result
+		}
+		return false;
+	}
+
+	/*
+	function arrayToString, convert array to string in format ('element0', 'element1', ... )
+	@param: array
+	*/
+	function arrayToString($array) {
+		$array_temp = array();
+		for($x=0;$x<sizeof($array);$x++) {
+			$array_temp[$x] = "'".$array[$x]."'";
+		}
+		$string = "(".implode(",", $array_temp).")";
+		return $string;
+	}
+
+	// ================= DATABASE/TABLE RELATED FUNCTIONS =================
+	/*
+	function delete null records
+	@param: table name
+	*/
 	function deleteNullRecords($tableName) {
 		//identify fields in the table
 		$fields = array();
@@ -31,7 +87,79 @@
 	    }
 	    mysql_query($query_null);
 	}
-	//function old FDS converter
+
+	/*
+    function import from .sql
+	@param: path to .sql file
+    */
+	function importFromSQLFile($Path) {
+		$templine = ''; // Temporary variable, used to store current query
+		$lines = file($Path); // Read in entire file
+		foreach ($lines as $line) {
+			if (substr($line, 0, 2) == '--' || $line == '') continue; // Skip it if it's a comment
+			$templine .= $line; // Add this line to the current segment
+			if (substr(trim($line), -1, 1) == ';') { // If it has a semicolon at the end, it's the end of the query
+			    mysql_query($templine) or print('Error performing query \'' . $templine . '\': ' . mysql_error().PHP_EOL); // Perform the query
+			    $templine = ''; // Reset temp variable to empty
+			}
+		}
+	}
+
+	/*
+	function recreate column
+	@param: database name, table name, column name, field type, after which column
+	*/
+	function recreateColumn($DatabaseName, $TableName, $ColumnName, $FieldType, $AfterWhat) {
+		$query = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$TableName' AND COLUMN_NAME = '$ColumnName' LIMIT 1";
+	    $result = mysql_query($query);
+	    $row = mysql_fetch_array($result);
+	    if($row['COLUMN_NAME']) {
+	    	$query = "ALTER TABLE old_fds DROP COLUMN $ColumnName";
+	    	mysql_query($query);
+	    }
+	    $query = "ALTER TABLE old_fds ADD $ColumnName $FieldType after $AfterWhat";
+		mysql_query($query);
+	}
+	/*
+	function recreate table
+	@param: database name, table name, fields (in string, deliminate by ',')
+	*/
+	function recreateTable($DatabaseName, $TableName, $Fields) {
+		$query = "SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$TableName' LIMIT 1";
+	    $result = mysql_query($query);
+	    $row = mysql_fetch_array($result);
+	    if($row['TABLE_NAME']) {
+	    	$query = "DROP TABLE $TableName";
+	    	mysql_query($query);
+	    }
+	    $query = "CREATE TABLE $TableName ($Fields)"; 
+		mysql_query($query);
+	}
+
+	/*
+	function clone table
+	@param: database name, table name, clone-table name
+	*/
+	function cloneTable($DatabaseName, $TableName, $CloneName) {
+		$query = "SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$CloneName' LIMIT 1";
+	    $result = mysql_query($query);
+	    $row = mysql_fetch_array($result);
+	    if($row['TABLE_NAME']) {
+	    	$query = "DROP TABLE $CloneName";
+	    	mysql_query($query);
+	    }
+		$query = "CREATE TABLE $CloneName LIKE $TableName"; 
+		if(!mysql_query($query)) die(mysql_error());
+		$query = "INSERT $CloneName SELECT * FROM $TableName";
+		if(!mysql_query($query)) die(mysql_error());
+	}
+
+	// ================= ENGINE RELATED FUNCTIONS =================
+	/*
+	function old FDS converter
+	@param: path to csv files
+	prerequisite: table 'old_fds' in database, fields exist already
+	*/
 	function convertCSVOldFDS($directory) {
 		//erase data
 		$query = "TRUNCATE TABLE old_fds";
@@ -57,9 +185,15 @@
 		    	$Date_Time = $emapData[1];
 		    	$Date_Time = toTimeStamp2($Date_Time);
 		    	$Customer_Name = mysql_real_escape_string($emapData[4]); //biar bisa baca (')
+		    	$Cust_ = explode(',', $Customer_Name);
+		    	$CustomerLastName = mysql_real_escape_string($Cust_[0]);
 		    	$Billing_Address = mysql_real_escape_string($emapData[18]); //biar bisa baca (')
 		    	$IPID_State = mysql_real_escape_string($emapData[24]); //biar bisa baca (')
-		    	$query = "INSERT INTO old_fds (No, TxnTime, TxnId, CustomerID, CustomerName, CustomerEmailAddress, TxnValue, TxnCurrency, LocValue, LocCurrency, OrigRecom, Reason, Note, CardType, CardNoMasked, AuthResp, RuleHits, PRISMScore, BillingAddress, BillingCountry, ShipZip, ShippingState, ShippingCountry, CustIPID, IPIDState, IPIDCountry, BINCountry, ShipMeth, TOF, ReD_TOF, DeviceID, OrderLines, FraudType, CurrentStatus, ChargebackStatus, SubClient, CompareStatus) VALUES ('$j', '$Date_Time', '$emapData[2]', '$emapData[3]', '$Customer_Name', '$emapData[5]', '$emapData[6]', '$emapData[7]', '$emapData[8]', '$emapData[9]', '$emapData[10]', '$emapData[11]', '$emapData[12]', '$emapData[13]', '$emapData[14]', '$emapData[15]', '$emapData[16]', '$emapData[17]', '$Billing_Address', '$emapData[19]', '$emapData[20]', '$emapData[21]', '$emapData[22]', '$emapData[23]', '$IPID_State', '$emapData[25]', '$emapData[26]', '$emapData[27]', '$emapData[28]', '$emapData[29]', '$emapData[30]', '$emapData[31]', '$emapData[32]', '$emapData[33]', '$emapData[33]', '$emapData[34]','-')";
+		    	$CurrentStatus = $emapData[33];
+		    	if($CurrentStatus == 'NoScore') {
+		    		$CurrentStatus = 'Deny';
+		    	}
+		    	$query = "INSERT INTO old_fds (No, TxnTime, TxnId, CustomerName, CustomerEmailAddress, TxnValue, CardType, BillingAddress, BillingCountry, ShipZip, ShippingCountry, CustIPID, IPIDState, IPIDCountry, BINCountry, CurrentStatus, SubClient, CustomerLastName, ChargebackStatus, CompareStatus) VALUES ('$j', '$Date_Time', '$emapData[2]', '$Customer_Name', '$emapData[5]', '$emapData[6]', '$emapData[13]', '$Billing_Address', '$emapData[19]', '$emapData[20]', '$emapData[22]', '$emapData[23]', '$IPID_State', '$emapData[25]', '$emapData[26]', '$CurrentStatus', '$emapData[34]','$CustomerLastName', '$CurrentStatus', '-')";
 		    	if (!mysql_query($query)) {
 		    		echo 'Problem with '.$files[$i].' ';
 	                die(mysql_error()).PHP_EOL;
@@ -68,27 +202,15 @@
 	    	}
 		}
 	    //DELETE NULL VALUE
-		deleteNullRecords('old_fds');   
+		deleteNullRecords('old_fds');
 	    echo 'Done'.PHP_EOL;
 	}
-	//function timestamp
-    //Note: solve mm/dd/yyyy vs. dd/mm/yyyy problem (still ambiguous for dd < 12) assuming input valid
-    function toTimeStamp($Time) {
-        $datetime = explode(" ", $Time); 
-        $date = $datetime[0]; 
-        if(mb_stripos($date, "/")!==FALSE) {
-            $date2 = explode("/", $date);
-            $month = $date2[0];
-            $day = $date2[1]; 
-            if($month>12) list($day,$month) = array($month,$day);
-            $year = $date2[2]; 
-            $date = $year."-".$month."-".$day;
-            $time = $datetime[1];
-            $Time = $date." ".$time;
-        }
-        return $Time;
-    }
-    //function surat sanggahan converter
+
+    /*
+    function surat sanggahan converter
+    @param: path to csv files
+	prerequisite: table 'suratsanggahan' in database, fields exist already
+    */
     function convertCSVSuratSanggahan($directory) {
     	//erase data
     	$query = "TRUNCATE TABLE suratsanggahan";
@@ -113,10 +235,10 @@
 	            $TradeTime = $emapData[1];
 	            $TradeTime = toTimeStamp($TradeTime);
 	            $SuratSanggahan = $emapData[9];
-	            if (stripos($SuratSanggahan, 'konfirm fraud')) {
-	                $Flag = "Deny";
-	            } else {
+	            if ((strpos($SuratSanggahan, 'konfirm fraud')== FALSE) && (strpos($SuratSanggahan, 'email fraud')== FALSE) && (strpos($SuratSanggahan, 'confirm fraud')== FALSE)) {
 	                $Flag = "Accept";
+	            } else {
+	                $Flag = "Deny";
 	            }
 	            $query = "INSERT INTO suratsanggahan (PaymentType, TradeTime, OrderID, CCNumber, CustomerEmail, Amount, SecurityRecom, LatestStatus, Result, SuratSanggahan, Flag, Tanggal, Refund, Notes, Merchant) VALUES ('$emapData[0]', '$TradeTime', '$emapData[2]', '$emapData[3]', '$emapData[4]', '$emapData[5]', '$emapData[6]', '$emapData[7]', '$emapData[8]', '$SuratSanggahan', '$Flag', '$emapData[10]', '$emapData[11]', '$emapData[12]','$Merchant')";
 	            if (!mysql_query($query)) {
@@ -136,53 +258,20 @@
 	    while($row_surat = mysql_fetch_assoc($result_surat)) {
 	        $CustomerEmail = $row_surat['CustomerEmail'];
 	        $Flag = $row_surat['Flag'];
-	        if($Flag == 'Accept') $acceptlist[] = "'".$CustomerEmail."'";
-	        else $denylist[] = "'".$CustomerEmail."'";
+	        if($Flag == 'Accept') $acceptlist[] = $CustomerEmail;
+	        else $denylist[] = $CustomerEmail;
 	    }
-	    $query_surat = "UPDATE old_fds SET ChargebackStatus = 'Accept' WHERE CustomerEmailAddress IN (".implode(',', $acceptlist).")";
+	    $query_surat = "UPDATE old_fds SET ChargebackStatus = 'Deny' WHERE CustomerEmailAddress IN  ".arrayToString($denylist);
 	    if(!mysql_query($query_surat)) die(mysql_error());
-	    $query_surat = "UPDATE old_fds SET ChargebackStatus = 'Deny' WHERE CustomerEmailAddress IN (".implode(',', $denylist).")";
+	    $query_surat = "UPDATE old_fds SET ChargebackStatus = 'Accept' WHERE CustomerEmailAddress IN ".arrayToString($acceptlist);
 	    if(!mysql_query($query_surat)) die(mysql_error());
 	    echo 'Done'.PHP_EOL;
     }
-    //function import from .sql
-	function importFromSQLFile($Path) {
-		$templine = ''; // Temporary variable, used to store current query
-		$lines = file($Path); // Read in entire file
-		foreach ($lines as $line) {
-			if (substr($line, 0, 2) == '--' || $line == '') continue; // Skip it if it's a comment
-			$templine .= $line; // Add this line to the current segment
-			if (substr(trim($line), -1, 1) == ';') { // If it has a semicolon at the end, it's the end of the query
-			    mysql_query($templine) or print('Error performing query \'' . $templine . '\': ' . mysql_error().PHP_EOL); // Perform the query
-			    $templine = ''; // Reset temp variable to empty
-			}
-		}
-	}
-	//function recreate column
-	function recreateColumn($DatabaseName, $TableName, $ColumnName, $FieldType, $AfterWhat) {
-		$query = "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$TableName' AND COLUMN_NAME = '$ColumnName' LIMIT 1";
-	    $result = mysql_query($query);
-	    $row = mysql_fetch_array($result);
-	    if($row['COLUMN_NAME']) {
-	    	$query = "ALTER TABLE old_fds DROP COLUMN $ColumnName";
-	    	mysql_query($query);
-	    }
-	    $query = "ALTER TABLE old_fds ADD $ColumnName $FieldType after $AfterWhat";
-		mysql_query($query);
-	}
-	//function recreate table
-	function recreateTable($DatabaseName, $TableName, $Fields) {
-		$query = "SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$TableName' LIMIT 1";
-	    $result = mysql_query($query);
-	    $row = mysql_fetch_array($result);
-	    if($row['TABLE_NAME']) {
-	    	$query = "DROP TABLE $TableName";
-	    	mysql_query($query);
-	    }
-	    $query = "CREATE TABLE $TableName ($Fields)"; 
-		mysql_query($query);
-	}
-	//function rules importer
+
+	/*
+	function rules importer
+	@param: path to rules.sql, table rulesconv, datarules
+	*/
 	function convertSQLRules($Path) {
 		$file = fopen("rules.txt","w");
 		//import
@@ -202,8 +291,6 @@
 		$signs_for_arr = array( " is not like " => "NOT IN");
 		$glues = array(" AND ", " OR ");
 		$vars = array(
-			"CUSTID" => "CustomerID",
-			"CUSTLASTNAME" => "CustomerLastName", 
 			"CUSTEMAIL" => "CustomerEmailAddress",
 			"E-mail Domain" => "CustomerEmailAddress",
 			"CUSTIP" => "CustIPID",
@@ -211,12 +298,11 @@
 			"SHIPCOUNTRY" => "ShippingCountry",
 			"BILLCOUNTRY" => "BillingCountry",
 			"Geolocation Country(IPID)" => "IPIDCountry",
-			//"Geolocation Continent(IPID)" => "BillingCountry",
 			"Card Issuing Country(VIRTBIN)" => "BINCountry"
 		);
 		//Retrieve rules
 		$j=1;
-	    $ignored_description = array('%more than%', '%CARDNO%', '%Observe Only%', '%PRODCD%', '%Phone%', '%VIRTIPIDANONYMIZER%', '%USERDATA14%', '%AFRICA%', '%BILLZIPCD%', '%Geolocation Continent(IPID)%', '%AUTHRESP%');
+	    $ignored_description = array('%more than%', '%CARDNO%', '%Observe Only%', '%PRODCD%', '%Phone%', '%VIRTIPIDANONYMIZER%', '%USERDATA14%', '%AFRICA%', '%BILLZIPCD%', '%Geolocation Continent(IPID)%', '%AUTHRESP%', '%CUSTLASTNAME%', '%CUSTID%');
 		$query = "SELECT RuleId, DateAdded, Description FROM datarules WHERE ";
 		$n_ignored = sizeof($ignored_description); 
 		for($i=0;$i<$n_ignored;$i++) {
@@ -327,6 +413,9 @@
 			    					$val_ = explode(")", $val_[1]);
 			    					$val = $val_[0];
 			    				}
+			    				if($sign = "LIKE") {
+			    					$val = '%'.$val.'%';
+			    				}
 			    				$Expression = $vars[$var]." ".$sign." '$val'";
 			    				break;
 			    			}
@@ -344,40 +433,120 @@
 	    fclose($file);
 	    echo "Done".PHP_EOL;
 	}
-	//function stripos array
-	function strposArray($haystack, $needle, $start=0) {
-		if(!is_array($needle)) $needle = array($needle);
-		foreach($needle as $query) {
-			if(strpos($haystack, $query, $start) !== false) return $query; // stop on first true result
-		}
-		return false;
-	}
-	//function clone table
-	function cloneTable($DatabaseName, $TableName, $CloneName) {
-		$query = "SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '$DatabaseName' AND TABLE_NAME = '$CloneName' LIMIT 1";
-	    $result = mysql_query($query);
-	    $row = mysql_fetch_array($result);
-	    if($row['TABLE_NAME']) {
-	    	$query = "DROP TABLE $CloneName";
-	    	mysql_query($query);
-	    }
-		$query = "CREATE TABLE $CloneName LIKE $TableName"; 
-		if(!mysql_query($query)) die(mysql_error());
-		$query = "INSERT $CloneName SELECT * FROM $TableName";
-		if(!mysql_query($query)) die(mysql_error());
-	}
-	//function arrayToString
-	function arrayToString($array) {
-		$array_temp = array();
-		for($x=0;$x<sizeof($array);$x++) {
-			$array_temp[$x] = "'".$array[$x]."'";
-		}
-		$string = "(".implode(",", $array_temp).")";
-		return $string;
-	}
 	
+	/*
+	function exportToCSV
+	prerequisite: table old_fds
+	*/
+	function exportToCSV() {
+		$fp = fopen('old-fds.csv', 'w');
+		$fields = array('TxnTime', 'CustomerName', 'CustomerEmailAddress', 'TxnValue', 'CardType', 'BillingAddress', 'BillingCountry', 'ShipZip', 'ShippingCountry', 'CustIPID', 'IPIDState', 'IPIDCountry', 'BINCountry', 'CurrentStatus', 'ChargebackStatus','SubClient');
+		fputcsv($fp, $fields);
+		$query = "SELECT * FROM old_fds";
+		$result = mysql_query($query);
+		while($row = mysql_fetch_assoc($result)) {
+			$fields = array(date("M_D", strtotime($row['TxnTime'])), $row['CustomerName'], $row['CustomerEmailAddress'], $row['TxnValue'], $row['CardType'], $row['BillingAddress'], $row['BillingCountry'], $row['ShipZip'], $row['ShippingCountry'], $row['CustIPID'], $row['IPIDState'], $row['IPIDCountry'], $row['BINCountry'], $row['CurrentStatus'], $row['ChargebackStatus'], $row['SubClient']);
+			fputcsv($fp, $fields);
+		}
+		fclose($fp);
+		echo 'Done'.PHP_EOL;
+	}
+
+	/*
+	function analyzeTransaction
+	prerequisite: table old_fds, rulesconv
+	*/
+	function engine() {
+		//create temp old-fds table
+		cloneTable('txn_data', 'old_fds', 'temp_fds');
+		
+		$file = fopen("engine.txt","w");
+		$ignore_if_dash = array("ShippingCountry", "BillingCountry", "IPIDCountry", "BINCountry");
+		//$analyzed_txn = array(''); //filled with TxnId
+		
+		$query_rule = "SELECT RuleId, StatusResult, Expression, Glue FROM rulesconv ORDER BY StatusResult DESC";
+		$result_rule = mysql_query($query_rule);
+		$n_rule = mysql_num_rows($result_rule);
+		$k = 0;
+		while($row_rule = mysql_fetch_assoc($result_rule)) {
+			$k++;
+			$query = "SELECT No FROM temp_fds";
+			$result = mysql_query($query);
+			$n_txn = mysql_num_rows($result);	
+
+			echo $k."/".$n_rule." Rule ".$row_rule['RuleId'].PHP_EOL;
+			fwrite($file, "Rule ".$row_rule['RuleId']);
+			//explode expression (some rules are multi-expression)
+			$Expressions = explode(" ; ", $row_rule['Expression']);
+			$hit = array();
+			for($i=0; $i<sizeof($Expressions);$i++) {
+				$expression = $Expressions[$i];
+				$is_ignored = strposArray($expression,$ignore_if_dash); 
+				if($is_ignored !== FALSE) {
+					$query_txn = "SELECT No, $is_ignored FROM temp_fds WHERE $expression HAVING $is_ignored <> '-'";
+				} else {
+					$query_txn = "SELECT No FROM temp_fds WHERE $expression";
+				}
+				if($result_txn = mysql_query($query_txn)) {
+					$hit[] = 1;
+				} else {
+					$hit[] = 0;
+				}
+			}
+			$Glue = $row_rule['Glue'];
+			$analyzed_txn = array();
+			if($Glue=='') {
+				while($row_txn = mysql_fetch_assoc($result_txn)) {
+					$analyzed_txn[] = $row_txn['No'];
+				}
+				//to include analyzed txn
+				if(sizeof($analyzed_txn)>0){
+					$analyzed = "WHERE No IN ".arrayToString($analyzed_txn);
+				}
+				$query_update = "UPDATE old_fds SET CompareStatus = '".$row_rule['StatusResult']."' $analyzed";
+				if(!mysql_query($query_update)) die(mysql_error());
+				$query_update = "DELETE FROM temp_fds $analyzed";
+				if(!mysql_query($query_update)) die(mysql_error());
+			} else {
+				$HIT = $hit[0];
+				for($k=1;$k<sizeof($hit);$k++) {
+					if($Glue=='AND') {
+						$HIT = $HIT & $hit[$k];
+					} else if($Glue=='OR') {
+						$HIT = $HIT | $hit[$k];
+					}
+				}
+				if($HIT) {
+					while($row_txn = mysql_fetch_assoc($result_txn)) {
+						$analyzed_txn[] = $row_txn['No'];
+					}
+					//to include analyzed txn
+					if(sizeof($analyzed_txn)>0){
+						$analyzed = "WHERE No IN ".arrayToString($analyzed_txn);
+					}
+					$query_update = "UPDATE old_fds SET CompareStatus = '".$row_rule['StatusResult']."' $analyzed";
+					if(!mysql_query($query_update)) die(mysql_error());
+					$query_update = "DELETE FROM temp_fds $analyzed";
+					if(!mysql_query($query_update)) die(mysql_error());
+				}	
+			}
+			//fwrite($file, " : transaction hit ".arrayToString($analyzed_txn).PHP_EOL);
+			fwrite($file, " : transaction hit ".sizeof($analyzed_txn)."/".$n_txn.PHP_EOL);	
+				
+		}
+		//finally~
+		//$query_update = "UPDATE old_fds SET CompareStatus = 'Accept' WHERE $new_analyzed";
+		$query_update = "UPDATE old_fds SET CompareStatus = 'Accept' WHERE CompareStatus = '-'";
+		if(!mysql_query($query_update)) die(mysql_error());		
+		$query = "DROP TABLE temp_fds";
+		mysql_query($query);
+		echo 'Done'.PHP_EOL;
+	}
+
 	// ================= MAIN =================
-	// database_connection.php
+	/*
+	biasanya aku pisah jadi "database_connection.php"
+	*/
 	$hostname = "localhost";
 	$user = "root"; // MySQL username
 	$password = ""; // MySQL password
@@ -385,101 +554,43 @@
 	$db = mysql_connect($hostname, $user, $password) or die('Error connecting to MySQL server: '.mysql_error()); // Connect to MySQL server
 	mysql_select_db($database, $db) or die('Error selecting MySQL database: '.mysql_error()); // Select database
 	
-	//Input user
-    echo "Reload old FDS, surat sanggahan, and rules? (Example: yyy, nnn) ";
+	/*
+	engine
+	*/
+    echo "[1 of 4] Reload old FDS transaction? (y/n) ";
 	$stdin = fopen('php://stdin', 'r');
 	$response = trim(fgetc($stdin));
-	if($response[0] == 'y'){
+	if($response == 'y'){
 		convertCSVOldFDS('C:/xampplite/htdocs/veritrans/fds-data/old-fds/');
 	}
-	if($response[1] == 'y'){
+	echo "[2 of 4] Reload surat sanggahan? (y/n) ";
+	$stdin = fopen('php://stdin', 'r');
+	$response = trim(fgetc($stdin));
+	if($response == 'y'){
 		convertCSVSuratSanggahan('C:/xampplite/htdocs/veritrans/fds-data/suratsanggahan/');
 	}
-	if($response[2] == 'y'){
+	echo "[3 of 4] Regenerate csv? (y/n) ";
+	$stdin = fopen('php://stdin', 'r');
+	$response = trim(fgetc($stdin));
+	if($response == 'y'){
+		echo '= Creating finalized dataset to CSV =',PHP_EOL;
+		exportToCSV();
+	}
+	echo "[3 of 4] Reload rules? (y/n) ";
+	$stdin = fopen('php://stdin', 'r');
+	$response = trim(fgetc($stdin));
+	if($response == 'y'){
 		convertSQLRules('C:\xampplite\htdocs\veritrans\fds-data\datarules.sql');
 	}
 
-	echo '= Analyze transaction ='.PHP_EOL;
-	//create temp old-fds table
-	cloneTable('txn_data', 'old_fds', 'temp_fds');
-	//Engine
-	$file = fopen("engine.txt","w");
-	$ignore_if_dash = array("ShippingCountry", "BillingCountry", "IPIDCountry", "BINCountry");
-	//$analyzed_txn = array(''); //filled with TxnId
+	echo '= Engine processing transaction ='.PHP_EOL;
 	$starttime = time();
-	$query_rule = "SELECT RuleId, StatusResult, Expression, Glue FROM rulesconv ORDER BY StatusResult DESC";
-	$result_rule = mysql_query($query_rule);
-	while($row_rule = mysql_fetch_assoc($result_rule)) {
-		//echo $row_rule['RuleId'];
-		fwrite($file, $row_rule['RuleId'].PHP_EOL);
-		//explode expression (some rules are multi-expression)
-		$Expressions = explode(" ; ", $row_rule['Expression']);
-		$hit = array();
-		for($i=0; $i<sizeof($Expressions);$i++) {
-			$expression = $Expressions[$i];
-			//to exclude analyzed txn
-			//$analyzed_temp = array();
-			//for($i=0;$i<sizeof($analyzed_txn);$i++) {
-			//	$analyzed_temp[$i] = "'".$analyzed_txn[$i]."'";
-			//}
-			//$analyzed = "TxnId NOT IN (".implode(",", $analyzed_temp).")";
-			//query, with ignore some field
-			$is_ignored = strposArray($expression,$ignore_if_dash,0); 
-			if($is_ignored) {
-				//$query_txn = "SELECT TxnId, $is_ignored FROM temp_fds WHERE $analyzed AND $expression HAVING $is_ignored <> '-'";
-				$query_txn = "SELECT TxnId, $is_ignored FROM temp_fds WHERE $expression HAVING $is_ignored <> '-'";
-			} else {
-				//$query_txn = "SELECT TxnId FROM temp_fds WHERE $analyzed AND $expression";
-				$query_txn = "SELECT TxnId FROM temp_fds WHERE $expression";
-			}
-			if($result_txn = mysql_query($query_txn)) {
-				$hit[] = 1;
-			} else {
-				$hit[] = 0; 
-				die(mysql_error());
-			}
-		}
-		$Glue = $row_rule['Glue'];
-		$analyzed_txn = array('');
-		if($Glue=='') {
-			while($row_txn = mysql_fetch_assoc($result_txn)) {
-				$analyzed_txn[] = $row_txn['TxnId'];
-			}
-			//to include analyzed txn
-			$analyzed = "TxnId IN ".arrayToString($analyzed_txn);
-			$query_update = "UPDATE old_fds SET CompareStatus = '".$row_rule['StatusResult']."' WHERE $analyzed";
-			if(!mysql_query($query_update)) die(mysql_error());
-			$query_update = "DELETE FROM temp_fds WHERE $analyzed";
-			if(!mysql_query($query_update)) die(mysql_error());
-		} else {
-			$HIT = $hit[0];
-			for($k=1;$k<sizeof($hit);$k++) {
-				if($Glue=='AND') {
-					$HIT = $HIT & $hit[$k];
-				} else if($Glue=='OR') {
-					$HIT = $HIT | $hit[$k];
-				}
-			}
-			if($HIT) {
-				while($row_txn = mysql_fetch_assoc($result_txn)) {
-					$analyzed_txn[] = $row_txn['TxnId'];
-				}
-				//to include analyzed txn
-				$analyzed = "TxnId IN ".arrayToString($analyzed_txn);
-				$query_update = "UPDATE old_fds SET CompareStatus = '".$row_rule['StatusResult']."' WHERE $analyzed";
-				if(!mysql_query($query_update)) die(mysql_error());
-				$query_update = "DELETE FROM temp_fds WHERE $analyzed";
-				if(!mysql_query($query_update)) die(mysql_error());
-			}	
-		}	
-	}
-	//finally~
-	//$query_update = "UPDATE old_fds SET CompareStatus = 'Accept' WHERE $new_analyzed";
-	$query_update = "UPDATE old_fds SET CompareStatus = 'Accept' WHERE CompareStatus IS NULL";
-	if(!mysql_query($query_update)) die(mysql_error());
+	engine();
 	$finishtime = time(); 
 	$exectime = $finishtime-$starttime;
-	echo " ".$exectime."s".PHP_EOL;
+	echo $exectime." s";
+
+
 	/*
 	echo "= Comparing engine result =".PHP_EOL;
 	
@@ -522,5 +633,4 @@
 	}
 	$accuracy = $match/$n_txn*100;
 	echo $match."/".$n_txn."=".$accuracy."%".PHP_EOL;*/
-	echo "Done".PHP_EOL;
 ?>
